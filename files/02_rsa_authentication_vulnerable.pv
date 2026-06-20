@@ -1,0 +1,68 @@
+(* =====================================================
+   RSA without authentication
+   Alice sends a secret to Bob
+   Check if Bob can verify Alice identity
+   ===================================================== *)
+
+free c: channel.
+
+type pkey.
+type skey.
+
+fun pk(skey): pkey.
+fun encrypt(bitstring,pkey): bitstring.
+reduc forall m:bitstring, sk:skey;
+decrypt(encrypt(m,pk(sk)),sk)=m.
+
+
+free secretMsg: bitstring [private].
+
+
+(* Event: Bob accepts a message *)
+event acceptBob(bitstring).
+
+(* Event: Alice sends *)
+event sendAlice(bitstring).
+
+
+let Alice(pkB:pkey)=
+
+    event sendAlice(secretMsg);
+
+    let cipher = encrypt(secretMsg,pkB) in
+
+    out(c,cipher).
+
+
+
+let Bob(skB:skey)=
+
+    in(c,x:bitstring);
+
+    let m = decrypt(x,skB) in
+
+    event acceptBob(m).
+
+
+
+(* Authentication query *)
+
+query m:bitstring;
+event(acceptBob(m))
+==>
+event(sendAlice(m)).
+
+
+process
+
+new skB:skey;
+
+let pkB=pk(skB) in
+
+out(c,pkB);
+
+(
+Alice(pkB)
+|
+Bob(skB)
+)

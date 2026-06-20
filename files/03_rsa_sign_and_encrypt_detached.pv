@@ -1,0 +1,63 @@
+(* ===========================================================
+   Stage 3 - RSA encryption + a DETACHED RSA signature
+   ===========================================================
+   Goal: fix the authentication flaw found in Stage 2 by having
+   Alice sign the message with her own private key. The ciphertext
+   (for confidentiality) and the signature (for authentication)
+   are computed independently and sent together as a pair.
+
+   GOAL OF THE STAGE : restore authentication.
+   FINDING            : this composition breaks confidentiality.
+
+   A textbook RSA signature allows "message recovery":
+       checksign(sign(m, sk), pk(sk)) = m
+   Since sigA = sign(secretMsg, skA) is sent in clear and pkA is
+   public, the attacker can recover secretMsg directly from the
+   signature alone -- without ever touching the ciphertext or
+   Bob's private key.
+   =========================================================== *)
+
+free c: channel.
+
+type pkey.
+type skey.
+
+(* --- RSA encryption --- *)
+fun pk(skey): pkey.
+fun encrypt(bitstring, pkey): bitstring.
+reduc forall m: bitstring, sk: skey; decrypt(encrypt(m, pk(sk)), sk) = m.
+
+(* --- RSA signature (destructor only -- never re-declared with fun) --- *)
+fun sign(bitstring, skey): bitstring.
+reduc forall m: bitstring, sk: skey; checksign(sign(m, sk), pk(sk)) = m.
+
+free secretMsg: bitstring [private].
+
+event sendAlice(bitstring).
+event acceptBob(bitstring).
+
+(* --- Properties to verify --- *)
+query attacker(secretMsg).
+query m: bitstring; event(acceptBob(m)) ==> event(sendAlice(m)).
+
+let Alice(skA: skey, pkB: pkey) =
+    event sendAlice(secretMsg);
+    let cipher = encrypt(secretMsg, pkB) in
+    let sigA = sign(secretMsg, skA) in
+    out(c, (cipher, sigA)).
+
+let Bob(skB: skey, pkA: pkey) =
+    in(c, (cipher: bitstring, sigA: bitstring));
+    let m = decrypt(cipher, skB) in
+    let mCheck = checksign(sigA, pkA) in
+    if m = mCheck then
+    event acceptBob(m).
+
+process
+    new skA: skey;
+    new skB: skey;
+    let pkA = pk(skA) in
+    let pkB = pk(skB) in
+    out(c, pkA);
+    out(c, pkB);
+    ( Alice(skA, pkB) | Bob(skB, pkA) )

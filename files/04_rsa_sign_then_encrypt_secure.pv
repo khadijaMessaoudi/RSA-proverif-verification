@@ -1,0 +1,54 @@
+(* ===========================================================
+   Stage 4 - RSA Sign-then-Encrypt (corrected construction)
+   ===========================================================
+   Alice signs the message with her private key, THEN encrypts
+   the pair (message, signature) as a single unit with Bob's
+   public key. The signature never appears outside the
+   ciphertext, so the message-recovery weakness from Stage 3
+   is eliminated while authentication is preserved.
+   =========================================================== *)
+
+free c: channel.
+
+type pkey.
+type skey.
+
+(* --- RSA encryption --- *)
+fun pk(skey): pkey.
+fun encrypt(bitstring, pkey): bitstring.
+reduc forall m: bitstring, sk: skey; decrypt(encrypt(m, pk(sk)), sk) = m.
+
+(* --- RSA signature --- *)
+fun sign(bitstring, skey): bitstring.
+reduc forall m: bitstring, sk: skey; checksign(sign(m, sk), pk(sk)) = m.
+
+free secretMsg: bitstring [private].
+
+event sendAlice(bitstring).
+event acceptBob(bitstring).
+
+(* --- Properties to verify --- *)
+query attacker(secretMsg).
+query m: bitstring; event(acceptBob(m)) ==> event(sendAlice(m)).
+
+let Alice(skA: skey, pkB: pkey) =
+    event sendAlice(secretMsg);
+    let sigA = sign(secretMsg, skA) in
+    let cipher = encrypt((secretMsg, sigA), pkB) in
+    out(c, cipher).
+
+let Bob(skB: skey, pkA: pkey) =
+    in(c, x: bitstring);
+    let (m: bitstring, sigA: bitstring) = decrypt(x, skB) in
+    let mCheck = checksign(sigA, pkA) in
+    if m = mCheck then
+    event acceptBob(m).
+
+process
+    new skA: skey;
+    new skB: skey;
+    let pkA = pk(skA) in
+    let pkB = pk(skB) in
+    out(c, pkA);
+    out(c, pkB);
+    ( Alice(skA, pkB) | Bob(skB, pkA) )

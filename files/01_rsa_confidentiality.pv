@@ -1,0 +1,49 @@
+(* ===========================================================
+   PHASE 2 - Confidentialite d'un message chiffre avec RSA
+   Scenario : Alice chiffre un secret avec la cle publique de Bob
+   et l'envoie sur un canal public observe par l'attaquant Eve.
+   =========================================================== *)
+
+(* --- Canal de communication public (controle par l'attaquant) --- *)
+free c: channel.
+
+(* --- Types --- *)
+type pkey.
+type skey.
+
+(* --- Primitive RSA : chiffrement asymetrique abstrait ---
+   pk(sk)             : derive la cle publique a partir de la cle privee
+   encrypt(m, pk)      : chiffre le message m avec la cle publique
+   decrypt(c, sk)       : dechiffre c avec la cle privee correspondante
+
+   L'equation ci-dessous capture la propriete fondamentale de RSA :
+   dechiffrer avec la cle privee ce qui a ete chiffre avec la cle
+   publique associee redonne le message original. *)
+fun pk(skey): pkey.
+fun encrypt(bitstring, pkey): bitstring.
+reduc forall m: bitstring, sk: skey; decrypt(encrypt(m, pk(sk)), sk) = m.
+
+(* --- Le secret qu'on veut proteger --- *)
+free secretMsg: bitstring [private].
+
+(* --- Propriete a verifier : confidentialite ---
+   On demande a ProVerif si l'attaquant peut apprendre secretMsg. *)
+query attacker(secretMsg).
+
+(* --- Processus Alice : envoie le secret chiffre avec la cle publique de Bob --- *)
+let Alice(pkB: pkey) =
+    let ciphertext = encrypt(secretMsg, pkB) in
+    out(c, ciphertext).
+
+(* --- Processus Bob : recoit, dechiffre --- *)
+let Bob(skB: skey) =
+    in(c, x: bitstring);
+    let plain = decrypt(x, skB) in
+    0.
+
+(* --- Processus principal --- *)
+process
+    new skB: skey;              (* Bob genere sa cle privee *)
+    let pkB = pk(skB) in
+    out(c, pkB);                 (* Bob publie sa cle publique sur le canal *)
+    ( Alice(pkB) | Bob(skB) )
